@@ -120,10 +120,8 @@ io.on('connection', function (socket) {
     });
 });
 
-server.listen(3000, function () {
-    console.log('listening on *:3000');
-});
-
+// LISTENING
+server.listen(process.env.PORT || 3000)
 
 // Utility Func remove
 Array.prototype.remove = function () {
