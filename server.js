@@ -4,6 +4,10 @@ var server = require('http').Server(app);
 var io = require('socket.io')(server);
 var fs = require("fs");
 
+
+// LISTENING
+server.listen(process.env.PORT || 3000);
+
 //var mongodb = require('mongodb');
 
 // Init mogodb
@@ -119,9 +123,6 @@ io.on('connection', function (socket) {
         io.sockets.emit('SERVER_LIST_USER_ONLINE', { SERVER_LIST_USER_ONLINE: listUsernames });
     });
 });
-
-// LISTENING
-server.listen(process.env.PORT || 3000)
 
 // Utility Func remove
 Array.prototype.remove = function () {
