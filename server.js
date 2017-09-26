@@ -1,16 +1,16 @@
 
+var cool = require('cool-ascii-faces');
 var app = require('express')();
 var server = require('http').Server(app);
 var io = require('socket.io')(server);
 var fs = require("fs");
 
-
 // LISTENING
 server.listen(process.env.PORT || 3000);
 
-app.get('/', function(request, response) {
-    response.send('Server is running...');
-  });
+app.get('/cool', function(request, response) {
+    response.send(cool());
+});
 
 //var mongodb = require('mongodb');
 
