@@ -8,8 +8,8 @@ var fs = require("fs");
 // LISTENING
 server.listen(process.env.PORT || 3000);
 
-app.get('/cool', function(request, response) {
-    response.send(cool());
+app.get('/', function(req, res){
+    res.send('<h1>Server is running...</h1>');
 });
 
 //var mongodb = require('mongodb');
