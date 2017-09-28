@@ -15,7 +15,7 @@ app.get('/', function(req, res){
 
 // Init mogodb
 var MongoClient = mongodb.MongoClient;
-var url = 'mongodb://leekhai18:kaka215419705@ds155424.mlab.com:55424/dbchatcloser?authSource=leekhai18';
+var url = 'mongodb://leekhai18:kaka215419705@ds155424.mlab.com:55424/dbchatcloser';
 
 MongoClient.connect(url, function (err, db) {
      if (err) {
