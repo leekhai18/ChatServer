@@ -19,9 +19,15 @@ var url = 'mongodb://leekhai18:kaka215419705@ds155424.mlab.com:55424/dbchatclose
 
 MongoClient.connect(url, function (err, db) {
      if (err) {
+        app.get('/', function(req, res){
+            res.send('<h1>Unable to connect to the mongoDB server. Error:</h1>');
+        });
          console.log('Unable to connect to the mongoDB server. Error:', err);
      } else {
          //HURRAY!! We are connected. :)
+         app.get('/', function(req, res){
+            res.send('<h1>Connection established to:</h1>');
+        });
          console.log('Connection established to', url);
          collection = db.collection('users_login');
      }
