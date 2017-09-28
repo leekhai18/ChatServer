@@ -4,6 +4,7 @@ var app = require('express')();
 var server = require('http').Server(app);
 var io = require('socket.io')(server);
 var fs = require("fs");
+var mongodb = require('mongodb');
 
 // LISTENING
 server.listen(process.env.PORT || 3000);
@@ -12,22 +13,19 @@ app.get('/', function(req, res){
     res.send('<h1>Server is running...</h1>');
 });
 
-//var mongodb = require('mongodb');
-
 // Init mogodb
-// var MongoClient = mongodb.MongoClient;
-// var url = 'mongodb://localhost:27017/test';
+var MongoClient = mongodb.MongoClient;
+var url = 'mongodb://leekhai18:kaka215419705@ds155424.mlab.com:55424/dbchatcloser';
 
-// MongoClient.connect(url, function (err, db) {
-//     if (err) {
-//         console.log('Unable to connect to the mongoDB server. Error:', err);
-//     } else {
-//         //HURRAY!! We are connected. :)
-//         console.log('Connection established to', url);
-//         collection = db.collection('users_login');
-
-//     }
-// });
+MongoClient.connect(url, function (err, db) {
+     if (err) {
+         console.log('Unable to connect to the mongoDB server. Error:', err);
+     } else {
+         //HURRAY!! We are connected. :)
+         console.log('Connection established to', url);
+         collection = db.collection('users_login');
+     }
+ });
 // Init mogodb
 
 var listUsernames = [];
@@ -84,41 +82,41 @@ io.on('connection', function (socket) {
         });
     });
 
-    // socket.on('CLIENT_LOGIN', function (email, password) {
-    //     console.log(email + " loged in");
+    socket.on('CLIENT_LOGIN', function (email, password) {
+        console.log(email + " loged in");
 
-    //     var cursor = collection.find({ email: email });
-    //     cursor.each(function (err, doc) {
-    //         if (err) {
-    //             console.log(err);
-    //             socket.emit('SERVER_RE_LOGIN', false);
-    //         } else {
-    //             if (doc != null) {
-    //                 if (doc.password == password) {
-    //                     socket.emit('SERVER_RE_LOGIN', true);
-    //                 } else {
-    //                     socket.emit('SERVER_RE_LOGIN', false);
-    //                 }
-    //             }
-    //         }
-    //     });
-    // });
+        var cursor = collection.find({ email: email });
+        cursor.each(function (err, doc) {
+            if (err) {
+                console.log(err);
+                socket.emit('SERVER_RE_LOGIN', false);
+            } else {
+                if (doc != null) {
+                    if (doc.password == password) {
+                        socket.emit('SERVER_RE_LOGIN', true);
+                    } else {
+                        socket.emit('SERVER_RE_LOGIN', false);
+                    }
+                }
+            }
+        });
+    });
 
-    // socket.on('CLIENT_REGISTER', function (name, password, email) {
-    //     console.log(name + " registed");
+    socket.on('CLIENT_REGISTER', function (name, password, email) {
+        console.log(name + " registed");
 
-    //     var user = { name: name, password: password, email: email };
+        var user = { name: name, password: password, email: email };
 
-    //     collection.insert(user, function (err, result) {
-    //         if (err) {
-    //             console.log(err);
-    //             socket.emit('SERVER_RE_REGISTER', false);
-    //         } else {
-    //             console.log('Added new user');
-    //             socket.emit('SERVER_RE_REGISTER', true);
-    //         }
-    //     });
-    // });
+        collection.insert(user, function (err, result) {
+            if (err) {
+                console.log(err);
+                socket.emit('SERVER_RE_REGISTER', false);
+            } else {
+                console.log('Added new user');
+                socket.emit('SERVER_RE_REGISTER', true);
+            }
+        });
+    });
 
 
     socket.on('disconnect', function () {
