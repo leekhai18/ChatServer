@@ -16,7 +16,7 @@ app.get('/', function(req, res){
 // Init mogodb
 var MongoClient = mongodb.MongoClient;
 var collection;
-var url = 'mongodb://heroku_d36rjwlp:heroku123@ds155934.mlab.com:55934/heroku_d36rjwlp';
+var url = 'mongodb://leekhai18:kaka215419705@ds155424.mlab.com:55424/dbchatcloser';
 
 MongoClient.connect(url, function (err, db) {
      if (err) {
