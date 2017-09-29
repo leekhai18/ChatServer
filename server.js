@@ -15,19 +15,14 @@ app.get('/', function(req, res){
 
 // Init mogodb
 var MongoClient = mongodb.MongoClient;
+var collection;
 var url = 'mongodb://heroku_d36rjwlp:heroku123@ds155934.mlab.com:55934/heroku_d36rjwlp';
 
 MongoClient.connect(url, function (err, db) {
      if (err) {
-        app.get('/', function(req, res){
-            res.send('<h1>Unable to connect to the mongoDB server. Error:</h1>');
-        });
          console.log('Unable to connect to the mongoDB server. Error:', err);
      } else {
          //HURRAY!! We are connected. :)
-         app.get('/', function(req, res){
-            res.send('<h1>Connection established to:</h1>');
-        });
          console.log('Connection established to', url);
          collection = db.collection('users_login');
      }
@@ -109,8 +104,6 @@ io.on('connection', function (socket) {
     });
 
     socket.on('CLIENT_REGISTER', function (name, password, email) {
-        console.log(name + " registed");
-
         var user = { name: name, password: password, email: email };
 
         collection.insert(user, function (err, result) {
@@ -118,7 +111,7 @@ io.on('connection', function (socket) {
                 console.log(err);
                 socket.emit('SERVER_RE_REGISTER', false);
             } else {
-                console.log('Added new user');
+                console.log(name + " registed");
                 socket.emit('SERVER_RE_REGISTER', true);
             }
         });
