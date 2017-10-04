@@ -104,12 +104,9 @@ io.on('connection', function (socket) {
         // Check email existences
         collection_Accounts.find({username: name}, function(err, flag) {     
             if(flag) {
-                console.log(doc); 
                 console.log('email has existed');
                 socket.emit('SERVER_RE_CHECK_EXISTENCE', true);
-            } else {
-                console.log(doc);
-
+            } else {       
                 socket.un = email;
                 console.log('added ' + name);
                 socket.emit('SERVER_RE_CHECK_EXISTENCE', false);
