@@ -14,38 +14,35 @@ app.get('/', function(req, res){
 });
 
 // Init mogodb
-var MongoClient = mongodb.MongoClient;
-var collection;
+var mongoClient = mongodb.MongoClient;
+var collection_Accounts;
+var collection_Conversations;
+var collection_Messages;
+var collection_Users;
+
 var url = 'mongodb://leekhai:123@ds155424.mlab.com:55424/dbchatcloser';
 
-MongoClient.connect(url, function (err, db) {
+mongoClient.connect(url, function (err, db) {
      if (err) {
          console.log('Unable to connect to the mongoDB server. Error:', err);
      } else {
          //HURRAY!! We are connected. :)
          console.log('Connection established to', url);
-         collection = db.collection('users_login');
+
+         //Get collections
+         collection_Accounts = db.collection('accounts');
+         collection_Users = db.collection('users');
+         collection_Conversations = db.collection('conversations');
+         collection_Messages = db.collection('messages');
      }
  });
 // Init mogodb
 
-var listUsernames = [];
+
+//SERVER_LIST_USER_ONLINE
 
 io.on('connection', function (socket) {
     console.log('a user connected');
-
-    socket.on('CLIENT_NEW_USER', function (data, isExists) {
-        if (listUsernames.indexOf(data) > -1) {
-            console.log('that name has exists');
-            isExists(true);
-        } else {
-            listUsernames.push(data);
-            socket.un = data;
-            console.log('added ' + data);
-            isExists(false);
-            io.sockets.emit('SERVER_LIST_USER_ONLINE', { SERVER_LIST_USER_ONLINE: listUsernames });
-        }
-    });
 
     socket.on('CLIENT_SEND_MESSAGE', function (message) {
         console.log(socket.un + ': ' + message);
@@ -75,7 +72,6 @@ io.on('connection', function (socket) {
     socket.on('CLIENT_SEND_REQUEST_SOUND', function (request) {
         fs.readFile("test.3gpp", function (err, data) {
             if (!err) {
-                console.log('SSSSSSSSSSSSSSSSS');
                 io.emit('SERVER_SEND_SOUND', data);
             } else {
                 console.log('send sound error!');
@@ -103,16 +99,35 @@ io.on('connection', function (socket) {
         });
     });
 
-    socket.on('CLIENT_REGISTER', function (name, password, email) {
-        var user = { name: name, password: password, email: email };
+    socket.on('CLIENT_REGISTER', function (username, password, email) {
+        
+        // Check email existences
+        collection_Accounts.find({username: username}, {$exists: true}).toArray(function(err, doc) {     
+            if(doc) //if it does
+            {
+                console.log(doc); // print out what it sends back
+                console.log('email has existed');
+                socket.emit('SERVER_RE_CHECK_EXISTENCE', true);
+            }
+            else if(!doc) // if it does not 
+            {
+                console.log("Not in docs");
 
-        collection.insert(user, function (err, result) {
-            if (err) {
-                console.log(err);
-                socket.emit('SERVER_RE_REGISTER', false);
-            } else {
-                console.log(name + " registed");
-                socket.emit('SERVER_RE_REGISTER', true);
+                socket.un = email;
+                console.log('added ' + username);
+                socket.emit('SERVER_RE_CHECK_EXISTENCE', false);
+    
+                // Add user into collection accounts on mongodb
+                var newUser = { username: username, password: password, email: email };
+                collection_Accounts.insert(newUser, function (err, result) {
+                    if (err) {
+                        console.log(err);
+                        socket.emit('SERVER_RE_REGISTER', false);
+                    } else {
+                        console.log(username + " registed");
+                        socket.emit('SERVER_RE_REGISTER', true);
+                    }
+                });
             }
         });
     });
@@ -120,8 +135,8 @@ io.on('connection', function (socket) {
 
     socket.on('disconnect', function () {
         console.log(socket.un + ' disconnected');
-        listUsernames.remove(socket.un);
-        io.sockets.emit('SERVER_LIST_USER_ONLINE', { SERVER_LIST_USER_ONLINE: listUsernames });
+        listEmailOfAcc.remove(socket.un);
+        io.sockets.emit('SERVER_LIST_USER_ONLINE', { SERVER_LIST_USER_ONLINE: listEmailOfAcc });
     });
 });
 
