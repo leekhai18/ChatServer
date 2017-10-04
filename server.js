@@ -99,32 +99,29 @@ io.on('connection', function (socket) {
         });
     });
 
-    socket.on('CLIENT_REGISTER', function (username, password, email) {
+    socket.on('CLIENT_REGISTER', function (name, password, email) {
         
         // Check email existences
-        collection_Accounts.find({username: username}, {$exists: true}).toArray(function(err, doc) {     
-            if(doc) //if it does
-            {
-                console.log(doc); // print out what it sends back
+        collection_Accounts.find({username: name}, function(err, flag) {     
+            if(flag) {
+                console.log(doc); 
                 console.log('email has existed');
                 socket.emit('SERVER_RE_CHECK_EXISTENCE', true);
-            }
-            else if(!doc) // if it does not 
-            {
-                console.log("Not in docs");
+            } else {
+                console.log(doc);
 
                 socket.un = email;
-                console.log('added ' + username);
+                console.log('added ' + name);
                 socket.emit('SERVER_RE_CHECK_EXISTENCE', false);
     
                 // Add user into collection accounts on mongodb
-                var newUser = { username: username, password: password, email: email };
+                var newUser = { username: name, password: password, email: email };
                 collection_Accounts.insert(newUser, function (err, result) {
                     if (err) {
                         console.log(err);
                         socket.emit('SERVER_RE_REGISTER', false);
                     } else {
-                        console.log(username + " registed");
+                        console.log(name + " registed");
                         socket.emit('SERVER_RE_REGISTER', true);
                     }
                 });
