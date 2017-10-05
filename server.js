@@ -16,11 +16,12 @@ app.get('/', function(req, res){
 // Init mogodb
 var mongoClient = mongodb.MongoClient;
 var collection_Accounts;
-var collection_Conversations;
-var collection_Messages;
-var collection_Users;
+//var collection_Conversations;
+//var collection_Messages;
+//var collection_Users;
 
-var url = 'mongodb://leekhai:123@ds155424.mlab.com:55424/dbchatcloser';
+//var url = 'mongodb://leekhai:123@ds155424.mlab.com:55424/dbchatcloser';
+var url = 'mongodb://localhost:27017/testdb';
 
 mongoClient.connect(url, function (err, db) {
      if (err) {
@@ -31,9 +32,9 @@ mongoClient.connect(url, function (err, db) {
 
          //Get collections
          collection_Accounts = db.collection('accounts');
-         collection_Users = db.collection('users');
-         collection_Conversations = db.collection('conversations');
-         collection_Messages = db.collection('messages');
+         //collection_Users = db.collection('users');
+         //collection_Conversations = db.collection('conversations');
+         //collection_Messages = db.collection('messages');
      }
  });
 // Init mogodb
@@ -100,28 +101,33 @@ io.on('connection', function (socket) {
     });
 
     socket.on('CLIENT_REGISTER', function (name, password, email) {
-        
+
         // Check email existences
-        collection_Accounts.find({username: name}, function(err, flag) {     
-            if(flag) {
-                console.log('email has existed');
-                socket.emit('SERVER_RE_CHECK_EXISTENCE', true);
-            } else {       
-                socket.un = email;
-                console.log('added ' + name);
-                socket.emit('SERVER_RE_CHECK_EXISTENCE', false);
-    
-                // Add user into collection accounts on mongodb
-                var newUser = { username: name, password: password, email: email };
-                collection_Accounts.insert(newUser, function (err, result) {
-                    if (err) {
-                        console.log(err);
-                        socket.emit('SERVER_RE_REGISTER', false);
-                    } else {
-                        console.log(name + " registed");
-                        socket.emit('SERVER_RE_REGISTER', true);
-                    }
-                });
+        let resultFinding = collection_Accounts.find({email: email}).limit(1);
+        resultFinding.count(function(err, isExistence) {
+            if (err){
+                console.log(err);
+            } else {
+                if(isExistence) {
+                    console.log('email has existed');
+                    socket.emit('SERVER_RE_CHECK_EXISTENCE', true);
+                } else {
+                    socket.un = email;
+                    console.log('adding ' + name);
+                    socket.emit('SERVER_RE_CHECK_EXISTENCE', false);
+        
+                    //Add user into collection accounts on mongodb
+                    var newUser = { username: name, password: password, email: email };
+                        collection_Accounts.insertOne(newUser, function (err, result) {
+                        if (err) {
+                            console.log(err);
+                            socket.emit('SERVER_RE_REGISTER', false);
+                        } else {
+                            console.log(name + " registed");
+                            socket.emit('SERVER_RE_REGISTER', true);
+                        }
+                    });
+                } 
             }
         });
     });
@@ -129,10 +135,9 @@ io.on('connection', function (socket) {
 
     socket.on('disconnect', function () {
         console.log(socket.un + ' disconnected');
-        listEmailOfAcc.remove(socket.un);
-        io.sockets.emit('SERVER_LIST_USER_ONLINE', { SERVER_LIST_USER_ONLINE: listEmailOfAcc });
     });
 });
+
 
 // Utility Func remove
 Array.prototype.remove = function () {
