@@ -81,9 +81,9 @@ io.on('connection', function (socket) {
     });
 
     socket.on('CLIENT_LOGIN', function (email, password) {
-        console.log(email + " loged in");
+        console.log(email + " logging...");
 
-        var cursor = collection.find({ email: email });
+        var cursor = collection_Accounts.find({ email: email });
         cursor.each(function (err, doc) {
             if (err) {
                 console.log(err);
@@ -92,10 +92,18 @@ io.on('connection', function (socket) {
                 if (doc != null) {
                     if (doc.password == password) {
                         socket.emit('SERVER_RE_LOGIN', true);
+                        console.log(email + " logged");
                     } else {
                         socket.emit('SERVER_RE_LOGIN', false);
+                        console.log("password is wrong");
                     }
+                } else {
+                    socket.emit('SERVER_RE_LOGIN', false);
+                    console.log("email does not exist");
                 }
+
+                //break
+                return false;
             }
         });
     });
