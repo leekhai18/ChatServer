@@ -6,6 +6,9 @@ var io = require('socket.io')(server);
 var fs = require("fs");
 var mongodb = require('mongodb');
 
+const ONLINE = "online";
+const OFFLINE = "offline";
+
 // LISTENING
 server.listen(process.env.PORT || 3000);
 
@@ -32,7 +35,7 @@ mongoClient.connect(url, function (err, db) {
 
          //Get collections
          collection_Accounts = db.collection('accounts');
-         //collection_Users = db.collection('users');
+         collection_Users = db.collection('users');
          //collection_Conversations = db.collection('conversations');
          //collection_Messages = db.collection('messages');
      }
@@ -80,19 +83,30 @@ io.on('connection', function (socket) {
         });
     });
 
-    socket.on('CLIENT_LOGIN', function (email, password) {
-        console.log(email + " logging...");
+    socket.on('CLIENT_LOGIN', function (m_email, m_password) {
+        console.log(m_email + " logging...");
 
-        var cursor = collection_Accounts.find({ email: email });
+        var cursor = collection_Accounts.find({ email: m_email });
         cursor.each(function (err, doc) {
             if (err) {
                 console.log(err);
                 socket.emit('SERVER_RE_LOGIN', false);
             } else {
                 if (doc != null) {
-                    if (doc.password == password) {
+                    if (doc.password == m_password) {
+                        // LOGIN SUCCESS
                         socket.emit('SERVER_RE_LOGIN', true);
-                        console.log(email + " logged");
+                        console.log(m_email + " logged");
+                        socket.un = m_email;
+                        socket.join(m_email);
+                        
+
+                        //update state
+                        updateState(socket.un, ONLINE);
+
+                        //Update list friends online to them and myself             
+                        updateListFriendOnline(socket, socket.un, ONLINE);
+
                     } else {
                         socket.emit('SERVER_RE_LOGIN', false);
                         console.log("password is wrong");
@@ -108,10 +122,10 @@ io.on('connection', function (socket) {
         });
     });
 
-    socket.on('CLIENT_REGISTER', function (name, password, email) {
+    socket.on('CLIENT_REGISTER', function (m_name, m_password, m_email) {
 
         // Check email existences
-        let resultFinding = collection_Accounts.find({email: email}).limit(1);
+        let resultFinding = collection_Accounts.find({email: m_email}).limit(1);
         resultFinding.count(function(err, isExistence) {
             if (err){
                 console.log(err);
@@ -120,19 +134,37 @@ io.on('connection', function (socket) {
                     console.log('email has existed');
                     socket.emit('SERVER_RE_CHECK_EXISTENCE', true);
                 } else {
-                    socket.un = email;
-                    console.log('adding ' + name);
+                    console.log('adding ' + m_name);
                     socket.emit('SERVER_RE_CHECK_EXISTENCE', false);
         
-                    //Add user into collection accounts on mongodb
-                    var newUser = { username: name, password: password, email: email };
-                        collection_Accounts.insertOne(newUser, function (err, result) {
+                    //Add account into collection accounts on mongodb
+                    var newAccount = { username: m_name, password: m_password, email: m_email };
+                        collection_Accounts.insertOne(newAccount, function (err, result) {
                         if (err) {
                             console.log(err);
                             socket.emit('SERVER_RE_REGISTER', false);
                         } else {
-                            console.log(name + " registed");
+                            console.log(m_name + " registed");
                             socket.emit('SERVER_RE_REGISTER', true);
+
+                            //Add base-user corresponding to account that is just create
+                            var listFriends = ["leekhai1", "leekhai2"];
+
+                            var listConversations = [];
+
+                            var  newUser = {email: m_email,
+                                            info: {username: m_name, avatar: "m_avatar"},
+                                            state: OFFLINE,
+                                            friends: listFriends.toString(),
+                                            conversations: listConversations.toString()};
+
+                            collection_Users.insertOne(newUser, function(err) {
+                                if (err) {
+                                    console.log(err);
+                                } else {
+                                    console.log("Added base-user corresponding to account that is just create");
+                                }
+                            })
                         }
                     });
                 } 
@@ -143,6 +175,12 @@ io.on('connection', function (socket) {
 
     socket.on('disconnect', function () {
         console.log(socket.un + ' disconnected');
+
+        //update state
+        updateState(socket.un, OFFLINE);
+
+        //Update list friends online to them and myself             
+        updateListFriendOnline(socket, socket.un, OFFLINE);
     });
 });
 
@@ -158,6 +196,58 @@ Array.prototype.remove = function () {
     }
     return this;
 };
+
+// Update state of user
+function updateState(userEmail, state) {
+    collection_Users.updateOne({email: userEmail}, {$set: {state: state}}, function(err, result){
+        if (err) {
+            console.log(err);
+        } else {
+            console.log(userEmail + " update to " + state);
+        }
+    });
+}
+
+// Update list friends online
+function updateListFriendOnline(socket, userEmail, state) {
+    collection_Users.findOne({email: userEmail}, function(err, result){
+        if (err) {
+            console.log(err);
+        } else {
+            var lsFriends = result.friends;
+            console.log(lsFriends);
+
+            var arrayFriends = lsFriends.split(",");
+            //Emit to friends
+            var listFriendsOnline = [];
+            for (i = 0; i < arrayFriends.length; i++){
+                collection_Users.findOne({email: arrayFriends[i]}, function(err, resultAF){
+                    if (err) {
+                        console.log(err);
+                    } else {
+                        if (resultAF.state == ONLINE) {
+                            //Add online user to listFriendOnline
+                            if (state == ONLINE) {
+                                listFriendsOnline.push(resultAF.email);
+                            }
+
+                            //send to others
+                            socket.to(resultAF.email).emit('SERVER_UPDATE_STATE_TO_OTHERS', {SERVER_UPDATE_STATE_TO_OTHERS: userEmail, USER_STATE: state});
+                        }
+                    }
+                });
+            }
+
+            if (state == ONLINE) {
+                //send the socket, because of too fast, so wait 1000ms
+                setTimeout(function(){
+                    console.log(socket.un + " list: " + listFriendsOnline);
+                    socket.emit('SERVER_UPDATE_FRIENDS_ONLINE', {SERVER_UPDATE_FRIENDS_ONLINE: listFriendsOnline});
+                }, 1000);
+            }
+        }
+    });
+}
 
 // Utility Create Filenames never same
 function getFilenameImage(id) {
