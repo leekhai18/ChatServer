@@ -48,9 +48,19 @@ mongoClient.connect(url, function (err, db) {
 io.on('connection', function (socket) {
     console.log('a user connected');
 
-    socket.on('CLIENT_SEND_MESSAGE', function (message) {
-        console.log(socket.un + ': ' + message);
-        io.sockets.emit('SERVER_SEND_MESSAGE', { SERVER_SEND_MESSAGE: socket.un + ': ' + message });
+    socket.on('CLIENT_SEND_MESSAGE', function (obj) {
+        var data = JSON.parse(obj);
+        console.log(socket.un + ': ' + data.message);
+        // name room chat
+        var room = socket.un + data.receiver;
+        // join in room
+        socket.join(room);
+        // get receiver to join, then chat
+        var sks = io.sockets.adapter.rooms[data.receiver]; // all in room
+        var receiverId = Object.keys(sks.sockets);
+        io.sockets.sockets[receiverId].join(room);
+        // emit to room expect sender
+        socket.to(room).emit('SERVER_SEND_MESSAGE', { SERVER_SEND_MESSAGE: socket.un + ': ' + data.message });
     });
 
     socket.on('CLIENT_SEND_IMAGE', function (bytesImg) {
@@ -84,8 +94,6 @@ io.on('connection', function (socket) {
     });
 
     socket.on('CLIENT_LOGIN', function (m_email, m_password) {
-        console.log(m_email + " logging...");
-
         var cursor = collection_Accounts.find({ email: m_email });
         cursor.each(function (err, doc) {
             if (err) {
@@ -176,11 +184,13 @@ io.on('connection', function (socket) {
     socket.on('disconnect', function () {
         console.log(socket.un + ' disconnected');
 
-        //update state
-        updateState(socket.un, OFFLINE);
+        if (socket.un != undefined) {
+            //update state
+            updateState(socket.un, OFFLINE);
 
-        //Update list friends online to them and myself             
-        updateListFriendOnline(socket, socket.un, OFFLINE);
+            //Update list friends online to them and myself             
+            updateListFriendOnline(socket, socket.un, OFFLINE);
+        }   
     });
 });
 
@@ -215,7 +225,6 @@ function updateListFriendOnline(socket, userEmail, state) {
             console.log(err);
         } else {
             var lsFriends = result.friends;
-            console.log(lsFriends);
 
             var arrayFriends = lsFriends.split(",");
             //Emit to friends
@@ -241,7 +250,6 @@ function updateListFriendOnline(socket, userEmail, state) {
             if (state == ONLINE) {
                 //send the socket, because of too fast, so wait 1000ms
                 setTimeout(function(){
-                    console.log(socket.un + " list: " + listFriendsOnline);
                     socket.emit('SERVER_UPDATE_FRIENDS_ONLINE', {SERVER_UPDATE_FRIENDS_ONLINE: listFriendsOnline});
                 }, 1000);
             }
