@@ -19,9 +19,9 @@ app.get('/', function(req, res){
 // Init mogodb
 var mongoClient = mongodb.MongoClient;
 var collection_Accounts;
-//var collection_Conversations;
-//var collection_Messages;
-//var collection_Users;
+var collection_Conversations;
+var collection_Messages;
+var collection_Users;
 
 //var url = 'mongodb://leekhai:123@ds155424.mlab.com:55424/dbchatcloser';
 var url = 'mongodb://localhost:27017/testdb';
@@ -36,31 +36,135 @@ mongoClient.connect(url, function (err, db) {
          //Get collections
          collection_Accounts = db.collection('accounts');
          collection_Users = db.collection('users');
-         //collection_Conversations = db.collection('conversations');
-         //collection_Messages = db.collection('messages');
+         collection_Conversations = db.collection('conversations');
+         collection_Messages = db.collection('messages');
      }
  });
 // Init mogodb
 
 
-//SERVER_LIST_USER_ONLINE
-
 io.on('connection', function (socket) {
     console.log('a user connected');
+
+    socket.on('CLIENT_REQUEST_DATA', function(req){
+        collection_Users.findOne({email: socket.un}, function(err, res){
+            if (err) {
+                console.log(err);
+            } else {
+                if (res != null) {
+                    // GIVE Conversations
+                    var conversations = res.conversations;
+                    var arrayConversations = conversations.split(",");
+                    var listMyCon = [];
+                    for (var i = 0; i < arrayConversations.length; i++){
+                        collection_Conversations.findOne({id: arrayConversations[i]}, function(err, result){
+                            if (err) {
+                                console.log(err);
+                            } else {
+                                if (result != null){
+                                    var participants = result.participants;
+                                    var arrayParticipants = participants.split(",");
+
+                                    for (var j = 0; j < arrayParticipants.length; j++){
+                                        if (arrayParticipants[j] != socket.un) {
+                                            listMyCon.push(arrayParticipants[j]);
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                    }                
+
+                    // GIVE Friends
+                    var friends = res.friends;
+                    var arrayFriends = friends.split(",");
+                    var listFriends = [];
+                    for (var i = 0; i < arrayFriends.length; i++){
+                        collection_Users.findOne({email: arrayFriends[i]}, function(err, resF){
+                            if (err) {
+                                console.log(err);
+                            } else {
+                                if (resF != null) {
+                                    listFriends.push({avatar: resF.info.avatar, name: resF.info.username, state: resF.state, email: resF.email});
+                                }
+                            }
+                        })
+                    }
+
+                    setTimeout(function(){
+                        socket.emit('SERVER_SEND_FRIENDS', {SERVER_SEND_FRIENDS: listFriends});
+                        setTimeout(function(){
+                            socket.emit('SERVER_SEND_CONVERSATIONS', {SERVER_SEND_CONVERSATIONS: listMyCon});
+                        }, 100)
+                    }, 400);
+                }
+            }
+        });
+
+        
+
+    });
 
     socket.on('CLIENT_SEND_MESSAGE', function (obj) {
         var data = JSON.parse(obj);
         console.log(socket.un + ': ' + data.message);
+
         // name room chat
-        var room = socket.un + data.receiver;
-        // join in room
-        socket.join(room);
-        // get receiver to join, then chat
-        var sks = io.sockets.adapter.rooms[data.receiver]; // all in room
-        var receiverId = Object.keys(sks.sockets);
-        io.sockets.sockets[receiverId].join(room);
+        var roomString = socket.un + data.receiver;
+        var sumCharCode = 0;
+        for (i = 0; i < roomString.length; i++) {
+            sumCharCode += roomString.charCodeAt(i);
+        }       
+        var room = sumCharCode.toString();
+
+        if (io.sockets.adapter.rooms[room] == undefined) {
+            // join in room
+            socket.join(room);
+            // get receiver to join, then chat
+            var sks = io.sockets.adapter.rooms[data.receiver]; // all in room
+            var receiverId = Object.keys(sks.sockets);
+            io.sockets.sockets[receiverId].join(room);
+
+            // create conversation, add into db.conversations
+            var findIdRoom = collection_Conversations.find({id: room}).limit(1);
+            findIdRoom.count(function(err, res){
+                if (err) {
+                    console.log(err);
+                } else {
+                    if (!res) {
+                        var listParticipants = [socket.un, data.receiver];
+                        var newConversation = { id: room,
+                                                participants: listParticipants.toString()};
+                        collection_Conversations.insertOne(newConversation, function(err, res) {
+                            if (err) {
+                                console.log(err);
+                            } else {
+                                console.log("Added this conversation to db");
+                            }
+                        });
+
+                        // update idConversation to users
+                        updateListConversations(socket.un, room);
+                        updateListConversations(data.receiver, room);
+                    }
+                }
+            });
+        }
+
+        // create message, add into db.messages
+        var newMessage = { sender: socket.un,
+                        message: data.message,
+                        idConversation: room}
+        collection_Messages.insertOne(newMessage, function(err, res){
+            if (err) {
+                console.log(err);
+            } else {
+                console.log("Added this message to db");
+            }
+        })
+        
         // emit to room expect sender
-        socket.to(room).emit('SERVER_SEND_MESSAGE', { SERVER_SEND_MESSAGE: socket.un + ': ' + data.message });
+        socket.to(room).emit('SERVER_SEND_MESSAGE', { SENDER: socket.un, MESSAGE: data.message });
     });
 
     socket.on('CLIENT_SEND_IMAGE', function (bytesImg) {
@@ -207,6 +311,29 @@ Array.prototype.remove = function () {
     return this;
 };
 
+// Update conversations of users
+function updateListConversations(userEmail, roomName) {
+    collection_Users.findOne({email: userEmail}, function(err, res) {
+        if (err) {
+            console.log(err);
+        } else {
+            if (res != null) {
+                var conversations = res.conversations;
+                var arrayConversations = conversations.split(",");
+                arrayConversations.push(roomName);
+    
+                collection_Users.updateOne({email: userEmail}, {$set: {conversations: arrayConversations.toString()}}, function(err, res){
+                    if (err) {
+                        console.log(err);
+                    } else {
+                        console.log("pushed " + roomName + " for " + userEmail);
+                    }
+                });
+            }    
+        }
+    });
+}
+
 // Update state of user
 function updateState(userEmail, state) {
     collection_Users.updateOne({email: userEmail}, {$set: {state: state}}, function(err, result){
@@ -224,34 +351,37 @@ function updateListFriendOnline(socket, userEmail, state) {
         if (err) {
             console.log(err);
         } else {
-            var lsFriends = result.friends;
-
-            var arrayFriends = lsFriends.split(",");
-            //Emit to friends
-            var listFriendsOnline = [];
-            for (i = 0; i < arrayFriends.length; i++){
-                collection_Users.findOne({email: arrayFriends[i]}, function(err, resultAF){
-                    if (err) {
-                        console.log(err);
-                    } else {
-                        if (resultAF.state == ONLINE) {
-                            //Add online user to listFriendOnline
-                            if (state == ONLINE) {
-                                listFriendsOnline.push(resultAF.email);
-                            }
-
-                            //send to others
-                            socket.to(resultAF.email).emit('SERVER_UPDATE_STATE_TO_OTHERS', {SERVER_UPDATE_STATE_TO_OTHERS: userEmail, USER_STATE: state});
+            if (result != null) {
+                var lsFriends = result.friends;
+                var arrayFriends = lsFriends.split(",");
+                //Emit to friends
+                var listFriendsOnline = [];
+                for (i = 0; i < arrayFriends.length; i++){
+                    collection_Users.findOne({email: arrayFriends[i]}, function(err, resultAF){
+                        if (err) {
+                            console.log(err);
+                        } else {
+                            if (resultAF != null) {
+                                if (resultAF.state == ONLINE) {
+                                    //Add online user to listFriendOnline
+                                    if (state == ONLINE) {
+                                        listFriendsOnline.push(resultAF.email);
+                                    }
+        
+                                    //send to others
+                                    socket.to(resultAF.email).emit('SERVER_UPDATE_STATE_TO_OTHERS', {SERVER_UPDATE_STATE_TO_OTHERS: userEmail, USER_STATE: state});
+                                }
+                            }       
                         }
-                    }
-                });
-            }
-
-            if (state == ONLINE) {
-                //send the socket, because of too fast, so wait 1000ms
-                setTimeout(function(){
-                    socket.emit('SERVER_UPDATE_FRIENDS_ONLINE', {SERVER_UPDATE_FRIENDS_ONLINE: listFriendsOnline});
-                }, 1000);
+                    });
+                }
+    
+                if (state == ONLINE) {
+                    //send the socket, because of too fast, so wait 1000ms
+                    setTimeout(function(){
+                        socket.emit('SERVER_UPDATE_FRIENDS_ONLINE', {SERVER_UPDATE_FRIENDS_ONLINE: listFriendsOnline});
+                    }, 1000);
+                }
             }
         }
     });
