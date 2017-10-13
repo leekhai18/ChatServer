@@ -234,7 +234,7 @@ io.on('connection', function (socket) {
         });
     });
 
-    socket.on('CLIENT_REGISTER', function (m_name, m_password, m_email) {
+    socket.on('CLIENT_REGISTER', function (m_name, m_password, m_email, m_phone) {
 
         // Check email existences
         let resultFinding = collection_Accounts.find({email: m_email}).limit(1);
@@ -265,7 +265,7 @@ io.on('connection', function (socket) {
                             var listConversations = [];
 
                             var  newUser = {email: m_email,
-                                            info: {username: m_name, avatar: "m_avatar"},
+                                            info: {username: m_name, avatar: "m_avatar", phone: m_phone},
                                             state: OFFLINE,
                                             friends: listFriends.toString(),
                                             conversations: listConversations.toString()};
@@ -369,7 +369,7 @@ function updateListFriendOnline(socket, userEmail, state) {
                                     }
         
                                     //send to others
-                                    socket.to(resultAF.email).emit('SERVER_UPDATE_STATE_TO_OTHERS', {SERVER_UPDATE_STATE_TO_OTHERS: userEmail, USER_STATE: state});
+                                    socket.to(resultAF.email).emit('SERVER_UPDATE_STATE_TO_OTHERS', {USER_EMAIL: userEmail, USER_STATE: state});
                                 }
                             }       
                         }
