@@ -85,18 +85,17 @@ io.on('connection', function (socket) {
                                 console.log(err);
                             } else {
                                 if (resF != null) {
-                                    listFriends.push({avatar: resF.info.avatar, name: resF.info.username, state: resF.state, email: resF.email});
+                                    listFriends.push({AVATAR: resF.info.avatar, NAME: resF.info.username, STATE: resF.state, EMAIL: resF.email});
                                 }
                             }
                         })
                     }
 
                     setTimeout(function(){
+                        socket.emit('SERVER_SEND_DATA_ME', {NAME: res.info.username, EMAIL: res.email, AVATAR: res.info.avatar});
                         socket.emit('SERVER_SEND_FRIENDS', {SERVER_SEND_FRIENDS: listFriends});
-                        setTimeout(function(){
-                            socket.emit('SERVER_SEND_CONVERSATIONS', {SERVER_SEND_CONVERSATIONS: listMyCon});
-                        }, 100)
-                    }, 400);
+                        socket.emit('SERVER_SEND_CONVERSATIONS', {SERVER_SEND_CONVERSATIONS: listMyCon});
+                    }, 300);
                 }
             }
         });
@@ -369,7 +368,7 @@ function updateListFriendOnline(socket, userEmail, state) {
                                     }
         
                                     //send to others
-                                    socket.to(resultAF.email).emit('SERVER_UPDATE_STATE_TO_OTHERS', {USER_EMAIL: userEmail, USER_STATE: state});
+                                    socket.to(resultAF.email).emit('SERVER_UPDATE_STATE_TO_OTHERS', {EMAIL: userEmail, STATE: state});
                                 }
                             }       
                         }
