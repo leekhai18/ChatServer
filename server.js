@@ -140,8 +140,9 @@ io.on('connection', function (socket) {
                             }
                         });
 
-                        // Need to emit to users
-                        
+                        // emit to receiver info conversation 
+                        socket.to(room).emit('SERVER_SEND_NEW_CONVERSATION', {EMAIL: socket.un, ID: room});
+
                         // update idConversation to users
                         updateListConversations(socket.un, room);
                         updateListConversations(data.receiver, room);
@@ -163,7 +164,7 @@ io.on('connection', function (socket) {
         })
         
         // emit to room expect sender
-        socket.to(room).emit('SERVER_SEND_MESSAGE', { SENDER: socket.un, MESSAGE: data.message });
+        socket.to(room).emit('SERVER_SEND_MESSAGE', { SENDER: socket.un, MESSAGE: data.message, ROOM: room });
     });
 
     socket.on('CLIENT_SEND_IMAGE', function (bytesImg) {
