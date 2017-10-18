@@ -67,13 +67,14 @@ io.on('connection', function (socket) {
 
                                     for (var j = 0; j < arrayParticipants.length; j++){
                                         if (arrayParticipants[j] != socket.un) {
-                                            listMyCon.push(arrayParticipants[j]);
+                                            listMyCon.push({EMAIL: arrayParticipants[j], ID: result.id});
                                         }
                                     }
                                 }
                             }
                         });
-                    }                
+                    } 
+                    
 
                     // GIVE Friends
                     var friends = res.friends;
@@ -95,7 +96,7 @@ io.on('connection', function (socket) {
                         socket.emit('SERVER_SEND_DATA_ME', {NAME: res.info.username, EMAIL: res.email, AVATAR: res.info.avatar});
                         socket.emit('SERVER_SEND_FRIENDS', {SERVER_SEND_FRIENDS: listFriends});
                         socket.emit('SERVER_SEND_CONVERSATIONS', {SERVER_SEND_CONVERSATIONS: listMyCon});
-                    }, 300);
+                    }, 400);
                 }
             }
         });
@@ -108,21 +109,18 @@ io.on('connection', function (socket) {
         var data = JSON.parse(obj);
         console.log(socket.un + ': ' + data.message);
 
-        // name room chat
-        var roomString = socket.un + data.receiver;
-        var sumCharCode = 0;
-        for (i = 0; i < roomString.length; i++) {
-            sumCharCode += roomString.charCodeAt(i);
-        }       
-        var room = sumCharCode.toString();
+        // name room chat  
+        var room = data.idConversation;
 
         if (io.sockets.adapter.rooms[room] == undefined) {
             // join in room
             socket.join(room);
             // get receiver to join, then chat
             var sks = io.sockets.adapter.rooms[data.receiver]; // all in room
-            var receiverId = Object.keys(sks.sockets);
-            io.sockets.sockets[receiverId].join(room);
+            if (sks != undefined){
+                var receiverId = Object.keys(sks.sockets);
+                io.sockets.sockets[receiverId].join(room);
+            }
 
             // create conversation, add into db.conversations
             var findIdRoom = collection_Conversations.find({id: room}).limit(1);
@@ -142,6 +140,8 @@ io.on('connection', function (socket) {
                             }
                         });
 
+                        // Need to emit to users
+                        
                         // update idConversation to users
                         updateListConversations(socket.un, room);
                         updateListConversations(data.receiver, room);
