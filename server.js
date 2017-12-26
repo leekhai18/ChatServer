@@ -1,4 +1,3 @@
-
 var cool = require('cool-ascii-faces');
 var app = require('express')();
 var server = require('http').Server(app);
@@ -107,7 +106,11 @@ io.on('connection', function (socket) {
 
     socket.on('CLIENT_SEND_MESSAGE', function (obj) {
         var data = JSON.parse(obj);
-        console.log(socket.un + ': ' + data.message);
+
+        if (data.type == 'TEXT')
+            console.log(socket.un + ': ' + data.message);
+        if (data.type == 'PICTURE')
+            console.log(socket.un + ': just send a image');
 
         // name room chat  
         var room = data.idConversation;
@@ -152,49 +155,27 @@ io.on('connection', function (socket) {
         }
 
         // create message, add into db.messages
-        var newMessage = { sender: socket.un,
-                        message: data.message,
-                        idConversation: room}
-        collection_Messages.insertOne(newMessage, function(err, res){
-            if (err) {
-                console.log(err);
-            } else {
-                console.log("Added this message to db");
-            }
-        })
-        
-        // emit to room expect sender
-        socket.to(room).emit('SERVER_SEND_MESSAGE', { SENDER: socket.un, MESSAGE: data.message, ROOM: room });
-    });
+        if (data.type != 'AUDIO') {
+            var newMessage = {  
+                sender: socket.un,
+                type: data.type,
+                time: data.time,
+                message: data.message,
+                idConversation: room}
 
-    socket.on('CLIENT_SEND_IMAGE', function (bytesImg) {
-        console.log('client send new image');
-        fs.writeFile(getFilenameImage(socket.id), bytesImg);
-    });
+            collection_Messages.insertOne(newMessage, function(err, res){
+                if (err) {
+                    console.log(err);
+                }
+            });
 
-    socket.on('CLIENT_SEND_REQUEST_IMAGE', function (request) {
-        fs.readFile("test.png", function (err, data) {
-            if (!err) {
-                io.emit('SERVER_SEND_IMAGE', data);
-            } else {
-                console.log('send image error!');
-            }
-        });
-    });
-
-    socket.on('CLIENT_SEND_SOUND', function (bytesSound) {
-        console.log('client send new sound');
-        fs.writeFile(getFilenameSound(socket.id), bytesSound);
-    });
-
-    socket.on('CLIENT_SEND_REQUEST_SOUND', function (request) {
-        fs.readFile("test.3gpp", function (err, data) {
-            if (!err) {
-                io.emit('SERVER_SEND_SOUND', data);
-            } else {
-                console.log('send sound error!');
-            }
-        });
+            // emit to room expect sender
+            socket.to(room).emit('SERVER_SEND_MESSAGE', { SENDER: socket.un, TYPE: data.type, TIME: data.time, MESSAGE: data.message, ROOM: room });
+        } else {
+            // emit to room expect sender, AUDIO don't save into db
+            console.log("just send audio");
+            socket.to(room).emit('SERVER_SEND_MESSAGE', { SENDER: socket.un, TYPE: data.type, MESSAGE: data.message, ROOM: room });
+        }
     });
 
     socket.on('CLIENT_LOGIN', function (m_email, m_password) {
@@ -218,17 +199,17 @@ io.on('connection', function (socket) {
 
                         //Update list friends online to them and myself             
                         updateListFriendOnline(socket, socket.un, ONLINE);
-
                     } else {
                         socket.emit('SERVER_RE_LOGIN', false);
                         console.log("password is wrong");
                     }
-                } else {
+                } 
+                
+                if (doc == null) {
                     socket.emit('SERVER_RE_LOGIN', false);
                     console.log("email does not exist");
                 }
 
-                //break
                 return false;
             }
         });
@@ -280,6 +261,25 @@ io.on('connection', function (socket) {
                         }
                     });
                 } 
+            }
+        });
+    });
+
+    socket.on('CLIENT_REQUEST_N_LAST_MESSAGE', function(idRoom){
+        var listMess = [];
+        let count = 0;
+        var cursor = collection_Messages.find({idConversation: idRoom}).limit(20).sort({_id:-1});
+        cursor.each(function(err, doc){
+            if (!err){
+                if (doc != null){
+                    listMess.push(doc);
+                }
+            }
+
+            count++;
+            if (count == 20){
+                socket.emit('SERVER_RES_N_LAST_MESSAGE', {SERVER_RES_N_LAST_MESSAGE: listMess});
+                return false;
             }
         });
     });
@@ -385,19 +385,4 @@ function updateListFriendOnline(socket, userEmail, state) {
             }
         }
     });
-}
-
-// Utility Create Filenames never same
-function getFilenameImage(id) {
-    return "images/" + id.substring(2) + getMilis() + ".png";
-}
-
-function getFilenameSound(id) {
-    return "sounds/" + id.substring(2) + getMilis() + ".3gpp";
-}
-
-function getMilis() {
-    var date = new Date();
-    var milis = date.getTime();
-    return milis;
 }
