@@ -66,13 +66,28 @@ io.on('connection', function (socket) {
 
                                     for (var j = 0; j < arrayParticipants.length; j++){
                                         if (arrayParticipants[j] != socket.un) {
-                                            listMyCon.push({EMAIL: arrayParticipants[j], ID: result.id});
+                                            //Get lastest mess conversation
+                                            var latestMess;
+                                            var emailFriendChat = arrayParticipants[j];
+                                            var cursor = collection_Messages.find({idConversation: result.id}).limit(1).sort({_id:-1});
+                                            cursor.each(function(err, doc){
+                                                if(!err){
+                                                    if (doc != null){
+                                                        latestMess = doc;      
+                                                        listMyCon.push({EMAIL: emailFriendChat, ID: result.id, LATESTMESSAGE: latestMess});                   
+                                                    }
+
+                                                    return false;
+                                                }
+                                            });
                                         }
                                     }
                                 }
                             }
                         });
                     } 
+                    
+                    
                     
 
                     // GIVE Friends
@@ -89,12 +104,22 @@ io.on('connection', function (socket) {
                                 }
                             }
                         })
-                    }
-
+                    }    
+                    
+                    
                     setTimeout(function(){
-                        socket.emit('SERVER_SEND_DATA_ME', {NAME: res.info.username, EMAIL: res.email, AVATAR: res.info.avatar});
                         socket.emit('SERVER_SEND_FRIENDS', {SERVER_SEND_FRIENDS: listFriends});
                         socket.emit('SERVER_SEND_CONVERSATIONS', {SERVER_SEND_CONVERSATIONS: listMyCon});
+
+                        collection_Users.findOne({email: socket.un}, function(err, me){
+                            if (!err && me != null){
+                                var mrequests = me.requests;
+                                var marrayRequest = mrequests.split(",");
+                                
+                                socket.emit('SERVER_SEND_DATA_ME', {NAME: res.info.username, EMAIL: res.email, AVATAR: res.info.avatar, 
+                                    SERVER_SEND_REQUEST_ADD_FRIEND: marrayRequest});
+                            }
+                        });
                     }, 400);
                 }
             }
@@ -106,11 +131,6 @@ io.on('connection', function (socket) {
 
     socket.on('CLIENT_SEND_MESSAGE', function (obj) {
         var data = JSON.parse(obj);
-
-        if (data.type == 'TEXT')
-            console.log(socket.un + ': ' + data.message);
-        if (data.type == 'PICTURE')
-            console.log(socket.un + ': just send a image');
 
         // name room chat  
         var room = data.idConversation;
@@ -144,7 +164,8 @@ io.on('connection', function (socket) {
                         });
 
                         // emit to receiver info conversation 
-                        socket.to(room).emit('SERVER_SEND_NEW_CONVERSATION', {EMAIL: socket.un, ID: room});
+                        socket.to(room).emit('SERVER_SEND_NEW_CONVERSATION', {EMAIL: socket.un, ID: room,
+                                                                            TYPE: data.type, MESSAGE: data.message, TIME: data.time});
 
                         // update idConversation to users
                         updateListConversations(socket.un, room);
@@ -206,11 +227,8 @@ io.on('connection', function (socket) {
                 } 
                 
                 if (doc == null) {
-                    socket.emit('SERVER_RE_LOGIN', false);
-                    console.log("email does not exist");
+                    return false;
                 }
-
-                return false;
             }
         });
     });
@@ -241,7 +259,7 @@ io.on('connection', function (socket) {
                             socket.emit('SERVER_RE_REGISTER', true);
 
                             //Add base-user corresponding to account that is just create
-                            var listFriends = ["leekhai1", "leekhai2"];
+                            var listFriends = [];
 
                             var listConversations = [];
 
@@ -249,7 +267,8 @@ io.on('connection', function (socket) {
                                             info: {username: m_name, avatar: "m_avatar", phone: m_phone},
                                             state: OFFLINE,
                                             friends: listFriends.toString(),
-                                            conversations: listConversations.toString()};
+                                            conversations: listConversations.toString(),
+                                            requests: ""};
 
                             collection_Users.insertOne(newUser, function(err) {
                                 if (err) {
@@ -265,21 +284,151 @@ io.on('connection', function (socket) {
         });
     });
 
+    var NUM_MESS_GET = 15;
     socket.on('CLIENT_REQUEST_N_LAST_MESSAGE', function(idRoom){
         var listMess = [];
-        let count = 0;
-        var cursor = collection_Messages.find({idConversation: idRoom}).limit(20).sort({_id:-1});
+        var cursor = collection_Messages.find({idConversation: idRoom}).limit(NUM_MESS_GET).sort({_id:-1});
         cursor.each(function(err, doc){
             if (!err){
                 if (doc != null){
                     listMess.push(doc);
                 }
+
+                if (doc == null) {
+                    socket.emit('SERVER_RES_N_LAST_MESSAGE', {SERVER_RES_N_LAST_MESSAGE: listMess});
+                    return false;
+                }
+            }
+        });
+    });
+
+    socket.on('CLIENT_REQUES_CONTINUE_MESSAGE', function(idRoom, messFrom){
+        var listMess = [];
+        var cursor = collection_Messages.find({idConversation: idRoom}).skip(messFrom).limit(NUM_MESS_GET).sort({_id:-1});
+        cursor.each(function(err, doc){
+            if (!err){
+                if (doc != null){
+                    listMess.push(doc);
+                }
+
+                if (doc == null) {
+                    socket.emit('SERVER_RES_CONTINUE_MESSAGE', {SERVER_RES_CONTINUE_MESSAGE: listMess});
+                    return false;
+                }
+            }
+        });
+    });
+
+    socket.on('CLIENT_PULL_USERS_NOT_FRIEND', function(listEmailFriend){
+        var listFriend = JSON.parse(listEmailFriend);
+
+        var listUsersNotFriend = [];
+        collection_Users.find().forEach(function(doc){
+            var flag = true;
+            listFriend.forEach(element => {
+                if (element == doc.email){
+                    flag = false;
+                }
+            });
+
+            if (doc.email == socket.un){
+                flag = false;
             }
 
-            count++;
-            if (count == 20){
-                socket.emit('SERVER_RES_N_LAST_MESSAGE', {SERVER_RES_N_LAST_MESSAGE: listMess});
-                return false;
+            if (flag == true){
+                listUsersNotFriend.push({EMAIL: doc.email, NAME: doc.info.username, AVATAR: doc.info.avatar});
+            }
+
+        }, callback => {
+            socket.emit('SERVER_RES_USERS_NOT_FRIEND', {SERVER_RES_USERS_NOT_FRIEND: listUsersNotFriend});
+        });
+    });
+
+    socket.on('CLIENT_REQUEST_ADD_FRIEND', function(m_user){
+        collection_Users.findOne({email: m_user}, function(err, doc){
+            if (!err && doc != null) {
+                var requests = doc.requests;
+                var arrayRequest = requests.split(",");
+                
+                var flag = true;
+                arrayRequest.forEach(function(req){
+                    if (req == socket.un){
+                        flag = false;
+                    }
+                });
+
+                if (flag == true){
+                    arrayRequest.push(socket.un);
+                    socket.to(m_user).emit('SERVER_SEND_REQUEST_ADD_FRIEND', {SERVER_SEND_REQUEST_ADD_FRIEND: socket.un});
+
+                    collection_Users.updateOne({email: m_user}, {$set: {requests: arrayRequest.toString()}}, function(err, res){
+                        if (!err) {
+                            console.log(socket.un + " just send request add friend to " + m_user);
+                        }
+                    });
+                }
+            }
+        });
+    });
+
+    socket.on('CLIENT_IGNORE_REQUEST_ADDFRIEND', function(m_user){
+        collection_Users.findOne({email: socket.un}, function(err, doc){
+            if (!err && doc != null) {
+                var requests = doc.requests;
+                var arrayRequest = requests.split(",");
+                
+                var index = arrayRequest.indexOf(m_user);
+                if (index > -1) {
+                    arrayRequest.splice(index, 1);
+                }
+
+                collection_Users.updateOne({email: socket.un}, {$set: {requests: arrayRequest.toString()}}, function(err, res){
+                    if (!err) {
+                        console.log(socket.un + " just ignore request add friend from " + m_user);
+                    }
+                });
+            }
+        });
+    });
+
+    socket.on('CLIENT_ACCEPT_REQUEST_ADDFRIEND', function(m_user){
+        collection_Users.findOne({email: socket.un}, function(err, doc){
+            if (!err && doc != null) {
+                var requests = doc.requests;
+                var arrayRequest = requests.split(",");
+                
+                var index = arrayRequest.indexOf(m_user);
+                if (index > -1) {
+                    arrayRequest.splice(index, 1);
+                }
+
+                var listFr = doc.friends;
+                var arrayFr = listFr.split(",");
+                arrayFr.push(m_user);
+
+                collection_Users.updateOne({email: socket.un}, {$set: {requests: arrayRequest.toString(), friends: arrayFr.toString()}}, 
+                    function(err, res){
+                        if (!err) {
+                            console.log(socket.un + " and " + m_user + " fall in friendship");
+                            socket.to(m_user).emit('SERVER_SEND_NEW_FRIEND', {EMAIL: doc.email, NAME: doc.info.username, AVATAR: doc.info.avatar, STATE: doc.state});
+                        }
+                    });
+            }
+        });
+
+        collection_Users.findOne({email: m_user}, function(err, docu){
+            if (!err && docu != null){
+                var listFru = docu.friends;
+                var arrayFru = listFru.split(",");
+                arrayFru.push(socket.un);
+
+                collection_Users.updateOne({email: m_user}, {$set: {friends: arrayFru.toString()}}, 
+                function(err, res){
+                    if (!err) {
+                        console.log(m_user + " and " + socket.un + " fall in friendship");
+                        socket.emit('SERVER_SEND_NEW_FRIEND', {EMAIL: docu.email, NAME: docu.info.username, AVATAR: docu.info.avatar, STATE: docu.state});
+                    }
+                });
             }
         });
     });
@@ -298,18 +447,6 @@ io.on('connection', function (socket) {
     });
 });
 
-
-// Utility Func remove
-Array.prototype.remove = function () {
-    var what, a = arguments, L = a.length, ax;
-    while (L && this.length) {
-        what = a[--L];
-        while ((ax = this.indexOf(what)) !== -1) {
-            this.splice(ax, 1);
-        }
-    }
-    return this;
-};
 
 // Update conversations of users
 function updateListConversations(userEmail, roomName) {
@@ -352,7 +489,7 @@ function updateListFriendOnline(socket, userEmail, state) {
             console.log(err);
         } else {
             if (result != null) {
-                var lsFriends = result.friends;
+                var lsFriends = result.friends;       
                 var arrayFriends = lsFriends.split(",");
                 //Emit to friends
                 var listFriendsOnline = [];
@@ -382,6 +519,7 @@ function updateListFriendOnline(socket, userEmail, state) {
                         socket.emit('SERVER_UPDATE_FRIENDS_ONLINE', {SERVER_UPDATE_FRIENDS_ONLINE: listFriendsOnline});
                     }, 1000);
                 }
+                
             }
         }
     });
