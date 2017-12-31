@@ -100,7 +100,12 @@ io.on('connection', function (socket) {
                                 console.log(err);
                             } else {
                                 if (resF != null) {
-                                    listFriends.push({AVATAR: resF.info.avatar, NAME: resF.info.username, STATE: resF.state, EMAIL: resF.email});
+                                    listFriends.push({
+                                        AVATAR: resF.info.avatar, 
+                                        NAME: resF.info.username, 
+                                        PHONE: resF.info.phone,
+                                        STATE: resF.state, 
+                                        EMAIL: resF.email});
                                 }
                             }
                         })
@@ -116,7 +121,10 @@ io.on('connection', function (socket) {
                                 var mrequests = me.requests;
                                 var marrayRequest = mrequests.split(",");
                                 
-                                socket.emit('SERVER_SEND_DATA_ME', {NAME: res.info.username, EMAIL: res.email, AVATAR: res.info.avatar, 
+                                socket.emit('SERVER_SEND_DATA_ME', {NAME: res.info.username, 
+                                    EMAIL: res.email, 
+                                    AVATAR: res.info.avatar,
+                                    PHONE: res.info.phone, 
                                     SERVER_SEND_REQUEST_ADD_FRIEND: marrayRequest});
                             }
                         });
@@ -175,6 +183,27 @@ io.on('connection', function (socket) {
             });
         }
 
+        // check receiver having this conversation
+        collection_Users.findOne({email: data.receiver}, function(err, doc){
+            if (!err && doc != null){
+                var listConversation = doc.conversations;
+                var arrayConversation = listConversation.split(",");
+
+                arrayConversation.push(room);
+
+                collection_Users.updateOne({email: data.receiver}, {$set: {conversations: arrayConversation.toString()}}, 
+                    function(err, res){
+                        if (!err) {
+                            console.log(data.receiver + " joined " + room);
+                            socket.to(data.receiver).emit('SERVER_SEND_NEW_CONVERSATION', {EMAIL: socket.un, ID: room,
+                                TYPE: data.type, MESSAGE: data.message, TIME: data.time});
+                        }
+                    }
+                );
+            }
+        });
+
+
         // create message, add into db.messages
         if (data.type != 'AUDIO') {
             var newMessage = {  
@@ -200,6 +229,7 @@ io.on('connection', function (socket) {
     });
 
     socket.on('CLIENT_LOGIN', function (m_email, m_password) {
+        var isSuccess = false;
         var cursor = collection_Accounts.find({ email: m_email });
         cursor.each(function (err, doc) {
             if (err) {
@@ -209,6 +239,7 @@ io.on('connection', function (socket) {
                 if (doc != null) {
                     if (doc.password == m_password) {
                         // LOGIN SUCCESS
+                        isSuccess = true;
                         socket.emit('SERVER_RE_LOGIN', true);
                         console.log(m_email + " logged");
                         socket.un = m_email;
@@ -226,14 +257,16 @@ io.on('connection', function (socket) {
                     }
                 } 
                 
-                if (doc == null) {
-                    return false;
+                if (doc == null && !isSuccess) {
+                    socket.emit('SERVER_RE_LOGIN', false);
                 }
+
+                return false;
             }
         });
     });
 
-    socket.on('CLIENT_REGISTER', function (m_name, m_password, m_email, m_phone) {
+    socket.on('CLIENT_REGISTER', function (m_name, m_password, m_email, m_phone, m_avatar) {
 
         // Check email existences
         let resultFinding = collection_Accounts.find({email: m_email}).limit(1);
@@ -259,15 +292,11 @@ io.on('connection', function (socket) {
                             socket.emit('SERVER_RE_REGISTER', true);
 
                             //Add base-user corresponding to account that is just create
-                            var listFriends = [];
-
-                            var listConversations = [];
-
                             var  newUser = {email: m_email,
-                                            info: {username: m_name, avatar: "m_avatar", phone: m_phone},
+                                            info: {username: m_name, avatar: m_avatar, phone: m_phone},
                                             state: OFFLINE,
-                                            friends: listFriends.toString(),
-                                            conversations: listConversations.toString(),
+                                            friends: "",
+                                            conversations: "",
                                             requests: ""};
 
                             collection_Users.insertOne(newUser, function(err) {
@@ -410,7 +439,11 @@ io.on('connection', function (socket) {
                     function(err, res){
                         if (!err) {
                             console.log(socket.un + " and " + m_user + " fall in friendship");
-                            socket.to(m_user).emit('SERVER_SEND_NEW_FRIEND', {EMAIL: doc.email, NAME: doc.info.username, AVATAR: doc.info.avatar, STATE: doc.state});
+                            socket.to(m_user).emit('SERVER_SEND_NEW_FRIEND', {  EMAIL: doc.email, 
+                                                                                NAME: doc.info.username,
+                                                                                PHONE: doc.info.phone, 
+                                                                                AVATAR: doc.info.avatar, 
+                                                                                STATE: doc.state});
                         }
                     });
             }
@@ -426,12 +459,84 @@ io.on('connection', function (socket) {
                 function(err, res){
                     if (!err) {
                         console.log(m_user + " and " + socket.un + " fall in friendship");
-                        socket.emit('SERVER_SEND_NEW_FRIEND', {EMAIL: docu.email, NAME: docu.info.username, AVATAR: docu.info.avatar, STATE: docu.state});
+                        socket.emit('SERVER_SEND_NEW_FRIEND', {EMAIL: docu.email, 
+                            NAME: docu.info.username, 
+                            AVATAR: docu.info.avatar,
+                            PHONE: docu.info.phone, 
+                            STATE: docu.state});
                     }
                 });
             }
         });
     });
+
+    socket.on('CLIENT_REMOVE_CONVERSATION', function(m_idConversation){
+        collection_Users.findOne({email: socket.un}, function(err, doc){
+            if (!err && doc != null){
+                var listConversation = doc.conversations;
+                var arrayConversation = listConversation.split(",");
+
+                var index = arrayConversation.indexOf(m_idConversation);
+                if (index > -1) {
+                    arrayConversation.splice(index, 1);
+                }
+
+                collection_Users.updateOne({email: socket.un}, {$set: {conversations: arrayConversation.toString()}}, 
+                    function(err, res){
+                        if (!err) {
+                            console.log(socket.un + " deleted conversation " + m_idConversation);
+                        }
+                    }
+                );
+            }
+        });
+    });
+
+    socket.on('CLIENT_UNFRIEND', function(m_email){
+        collection_Users.findOne({email: socket.un}, function(err, doc){
+            if (!err && doc != null){
+                var listFriend = doc.friends;
+                var arrayFriend = listFriend.split(",");
+
+                var index = arrayFriend.indexOf(m_email);
+                if (index > -1) {
+                    arrayFriend.splice(index, 1);
+                }
+
+                collection_Users.updateOne({email: socket.un}, {$set: {friends: arrayFriend.toString()}}, 
+                    function(err, res){
+                        if (!err) {
+                            console.log(socket.un + " and " + m_email + " are not friend");
+
+                            socket.emit('SERVER_UNFRIEND_SUCCESS', true);
+                        }
+                    }
+                );
+            }
+        });
+
+        collection_Users.findOne({email: m_email}, function(err, doc){
+            if (!err && doc != null){
+                var listFriend = doc.friends;
+                var arrayFriend = listFriend.split(",");
+
+                var index = arrayFriend.indexOf(socket.un);
+                if (index > -1) {
+                    arrayFriend.splice(index, 1);
+                }
+
+                collection_Users.updateOne({email: m_email}, {$set: {friends: arrayFriend.toString()}}, 
+                    function(err, res){
+                        if (!err) {
+                            console.log(m_email + " and " + socket.un + " are not friend");
+
+                            socket.to(m_email).emit('SERVER_UNFRIEND_SUCCESS', true);
+                        }
+                    }
+                );
+            }
+        });
+    })
 
 
     socket.on('disconnect', function () {
