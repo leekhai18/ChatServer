@@ -508,7 +508,7 @@ io.on('connection', function (socket) {
                         if (!err) {
                             console.log(socket.un + " and " + m_email + " are not friend");
 
-                            socket.emit('SERVER_UNFRIEND_SUCCESS', true);
+                            socket.emit('SERVER_UNFRIEND_SUCCESS', m_email);
                         }
                     }
                 );
@@ -530,13 +530,95 @@ io.on('connection', function (socket) {
                         if (!err) {
                             console.log(m_email + " and " + socket.un + " are not friend");
 
-                            socket.to(m_email).emit('SERVER_UNFRIEND_SUCCESS', true);
+                            socket.to(m_email).emit('SERVER_UNFRIEND_SUCCESS', socket.un);
                         }
                     }
                 );
             }
         });
     })
+
+    socket.on('CLIENT_CHANGE_PASSWORD', function(m_newpassword){
+        collection_Accounts.findOne({email: socket.un}, function(err, doc){
+            if (!err && doc != null){
+                isSuccess = false;
+                    collection_Accounts.updateOne({email: socket.un}, {$set: {password: m_newpassword}}, 
+                    function(err, res){
+                        if (!err) {
+                            if (res != null){
+                                isSuccess = true;
+                                console.log(socket.un + " changed password");
+                                socket.emit('SERVER_CHANGE_PASSWORD_SUCCESS', true);
+                            }
+
+                            if (res == null && !isSuccess){
+                                socket.emit('SERVER_CHANGE_PASSWORD_SUCCESS', false);
+                            }
+                        }
+                    }
+                );
+            }
+        });
+    });
+
+    socket.on('CLIENT_CHANGE_AVATAR', function(m_avatar){
+        collection_Users.findOne({email: socket.un}, function(err, doc){
+            if (!err && doc != null){
+                var infoUpdate = {username: doc.info.username, avatar: m_avatar, phone: doc.info.phone};
+                collection_Users.updateOne({email: socket.un}, {$set: {info: infoUpdate}}, 
+                    function(err, res){
+                        if (!err) {
+                            console.log(socket.un + " changed avatar");
+                        }
+                    }
+                );
+            }
+        });
+    });
+
+    socket.on('CLIENT_CHANGE_NAME', function(m_name){
+        collection_Users.findOne({email: socket.un}, function(err, doc){
+            if (!err && doc != null){
+                var infoUpdate = {username: m_name, avatar: doc.info.avatar, phone: doc.info.phone};
+                collection_Users.updateOne({email: socket.un}, {$set: {info: infoUpdate}}, 
+                    function(err, res){
+                        if (!err) {
+                            console.log(socket.un + " changed username");
+                        }
+                    }
+                );
+            }
+        });
+    });
+
+    socket.on('CLIENT_CHANGE_PHONE', function(m_phone){
+        collection_Users.findOne({email: socket.un}, function(err, doc){
+            if (!err && doc != null){
+                var infoUpdate = {username: doc.info.username, avatar: doc.info.avatar, phone: m_phone};
+                collection_Users.updateOne({email: socket.un}, {$set: {info: infoUpdate}}, 
+                    function(err, res){
+                        if (!err) {
+                            console.log(socket.un + " changed phonenumber");
+                        }
+                    }
+                );
+            }
+        });
+    });
+
+    socket.on('CLIENT_FORGOT_PASSWORD', function(m_email){
+        isSuccess = false;
+        collection_Accounts.findOne({email: m_email}, function(err, doc){
+            if (!err && doc != null){
+                isSuccess = true;
+                socket.emit('SERVER_SEND_PASSWORD', doc.password);
+                console.log(m_email + " just get password");
+            } else if (!isSuccess){
+                socket.emit('SERVER_SEND_PASSWORD', false);
+                console.log(m_email + " does not exists");
+            }
+        });
+    });
 
 
     socket.on('disconnect', function () {
