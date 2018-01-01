@@ -189,17 +189,20 @@ io.on('connection', function (socket) {
                 var listConversation = doc.conversations;
                 var arrayConversation = listConversation.split(",");
 
-                arrayConversation.push(room);
+                var index = arrayConversation.indexOf(room);
+                if (index > -1) {
+                    arrayConversation.push(room);
 
-                collection_Users.updateOne({email: data.receiver}, {$set: {conversations: arrayConversation.toString()}}, 
-                    function(err, res){
-                        if (!err) {
-                            console.log(data.receiver + " joined " + room);
-                            socket.to(data.receiver).emit('SERVER_SEND_NEW_CONVERSATION', {EMAIL: socket.un, ID: room,
-                                TYPE: data.type, MESSAGE: data.message, TIME: data.time});
+                    collection_Users.updateOne({email: data.receiver}, {$set: {conversations: arrayConversation.toString()}}, 
+                        function(err, res){
+                            if (!err) {
+                                console.log(data.receiver + " joined " + room);
+                                socket.to(data.receiver).emit('SERVER_SEND_NEW_CONVERSATION', {EMAIL: socket.un, ID: room,
+                                    TYPE: data.type, MESSAGE: data.message, TIME: data.time});
+                            }
                         }
-                    }
-                );
+                    );
+                }
             }
         });
 
