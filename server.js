@@ -184,27 +184,29 @@ io.on('connection', function (socket) {
         }
 
         // check receiver having this conversation
-        collection_Users.findOne({email: data.receiver}, function(err, doc){
-            if (!err && doc != null){
-                var listConversation = doc.conversations;
-                var arrayConversation = listConversation.split(",");
-
-                var index = arrayConversation.indexOf(room);
-                if (index < 0) {
-                    arrayConversation.push(room);
-
-                    collection_Users.updateOne({email: data.receiver}, {$set: {conversations: arrayConversation.toString()}}, 
-                        function(err, res){
-                            if (!err) {
-                                console.log(data.receiver + " joined " + room);
-                                socket.to(data.receiver).emit('SERVER_SEND_NEW_CONVERSATION', {EMAIL: socket.un, ID: room,
-                                    TYPE: data.type, MESSAGE: data.message, TIME: data.time});
+        setTimeout(function(){
+            collection_Users.findOne({email: data.receiver}, function(err, doc){
+                if (!err && doc != null){
+                    var listConversation = doc.conversations;
+                    var arrayConversation = listConversation.split(",");
+    
+                    var index = arrayConversation.indexOf(room);
+                    if (index < 0) {
+                        arrayConversation.push(room);
+    
+                        collection_Users.updateOne({email: data.receiver}, {$set: {conversations: arrayConversation.toString()}}, 
+                            function(err, res){
+                                if (!err) {
+                                    console.log(data.receiver + " joined " + room);
+                                    socket.to(data.receiver).emit('SERVER_SEND_NEW_CONVERSATION', {EMAIL: socket.un, ID: room,
+                                        TYPE: data.type, MESSAGE: data.message, TIME: data.time});
+                                }
                             }
-                        }
-                    );
+                        );
+                    }
                 }
-            }
-        });
+            });                   
+        }, 400);
 
 
         // create message, add into db.messages
