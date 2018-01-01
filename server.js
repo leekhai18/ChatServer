@@ -22,8 +22,8 @@ var collection_Conversations;
 var collection_Messages;
 var collection_Users;
 
-//var url = 'mongodb://leekhai:123@ds155424.mlab.com:55424/dbchatcloser';
-var url = 'mongodb://localhost:27017/testdb';
+var url = 'mongodb://leekhai:123@ds155424.mlab.com:55424/dbchatcloser';
+//var url = 'mongodb://localhost:27017/testdb';
 
 mongoClient.connect(url, function (err, db) {
      if (err) {
